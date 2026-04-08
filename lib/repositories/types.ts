@@ -3,11 +3,14 @@ import type { Expense, Message, MessageRole, Note, Reminder } from "@/lib/shared
 export interface MessageRepository {
   add(role: MessageRole, content: string, createdAt?: string): Message;
   list(limit?: number): Message[];
+  clear(): void;
 }
 
 export interface ExpenseRepository {
   add(amount: number, category: string, date: string): Expense;
-  report(range: "daily" | "weekly" | "monthly", reference?: Date): {
+  list(limit?: number): Expense[];
+  delete(expenseId: number): boolean;
+  report(range: "daily" | "weekly" | "monthly" | "yearly", reference?: Date): {
     total: number;
     count: number;
     rows: Expense[];
@@ -19,6 +22,7 @@ export interface ReminderRepository {
   listDue(nowIso: string): Reminder[];
   markDelivered(id: number): void;
   listUpcoming(limit?: number): Reminder[];
+  delete(id: number): boolean;
 }
 
 export interface NoteRepository {

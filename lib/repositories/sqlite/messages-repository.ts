@@ -43,4 +43,9 @@ export const sqliteMessageRepository = {
 
     return rows.reverse().map(rowToMessage);
   },
+
+  clear(): void {
+    const db = getDb();
+    db.prepare(`DELETE FROM messages`).run();
+  },
 };

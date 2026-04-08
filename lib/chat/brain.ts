@@ -2,16 +2,30 @@ import { parseIntent } from "@/lib/chat/parser";
 import { getRepositories } from "@/lib/repositories";
 import type { Message } from "@/lib/shared/types";
 
+function formatDate(iso: string): string {
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(new Date(iso));
+}
+
 function money(value: number): string {
-  return new Intl.NumberFormat("en-US", {
+  return new Intl.NumberFormat("en-IN", {
     style: "currency",
-    currency: "USD",
+    currency: "INR",
     maximumFractionDigits: 2,
   }).format(value);
 }
 
 function formatTime(iso: string): string {
-  return new Date(iso).toLocaleString();
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(iso));
 }
 
 function clip(text: string, max = 180): string {
@@ -27,6 +41,33 @@ function formatNotesList(lines: { id: number; content: string }[]): string {
   ].join("\n");
 }
 
+function formatExpenseRange(range: "daily" | "weekly" | "monthly" | "yearly"): string {
+  switch (range) {
+    case "daily":
+      return "today";
+    case "weekly":
+      return "this week";
+    case "monthly":
+      return "this month";
+    case "yearly":
+      return "this year";
+  }
+}
+
+function helpText(): string {
+  return [
+    "Try one of these commands:",
+    "- spent 18 lunch",
+    "- add expense 72 groceries",
+    "- report today / this week / this month / this year",
+    "- remind me to call mom at 7pm",
+    "- set reminder pay rent tomorrow 9am",
+    "- note: buy milk #shopping",
+    "- show notes / search note groceries / delete note 3",
+    "- show reminders / recent expenses",
+  ].join("\n");
+}
+
 export function processChatMessage(input: string, createdAt?: string): { user: Message; bot: Message } {
   const repos = getRepositories();
   const now = new Date();
@@ -38,20 +79,32 @@ export function processChatMessage(input: string, createdAt?: string): { user: M
   switch (intent.type) {
     case "expense_add": {
       const expense = repos.expenses.add(intent.amount, intent.category, intent.date);
-      botReply = `Expense saved: ${money(expense.amount)} in ${expense.category} (${new Date(expense.date).toLocaleDateString()}).`;
+      botReply = `Expense saved: ${money(expense.amount)} in ${expense.category} (${formatDate(expense.date)}).`;
       break;
     }
     case "expense_report": {
       const report = repos.expenses.report(intent.range);
-      const period = intent.range.replace("ly", "");
+      const period = formatExpenseRange(intent.range);
       botReply = report.count
         ? [
-            `Expense report (${period}):`,
+            `Expense report for ${period}:`,
             `Total: ${money(report.total)}`,
             `Entries: ${report.count}`,
             ...report.rows.slice(0, 5).map((row) => `- ${money(row.amount)} ${row.category}`),
           ].join("\n")
-        : `No expenses found for this ${period}.`;
+        : `No expenses found for ${period}.`;
+      break;
+    }
+    case "expense_list": {
+      const expenses = repos.expenses.list(intent.limit);
+      botReply = expenses.length
+        ? [
+            "Recent expenses:",
+            ...expenses.map(
+              (row) => `- ${money(row.amount)} ${row.category} on ${formatDate(row.date)} (#${row.id})`
+            ),
+          ].join("\n")
+        : "No expenses yet.";
       break;
     }
     case "reminder_create": {
@@ -59,9 +112,19 @@ export function processChatMessage(input: string, createdAt?: string): { user: M
       botReply = `Reminder created for ${formatTime(reminder.remindAt)}: ${clip(reminder.content)}`;
       break;
     }
+    case "reminder_list": {
+      const reminders = repos.reminders.listUpcoming(8);
+      botReply = reminders.length
+        ? [
+            "Upcoming reminders:",
+            ...reminders.map((reminder) => `- ${formatTime(reminder.remindAt)}: ${clip(reminder.content)}`),
+          ].join("\n")
+        : "No upcoming reminders.";
+      break;
+    }
     case "note_create": {
       const note = repos.notes.add(intent.content, intent.tags);
-      botReply = `📝 Note saved (#${note.id}).`;
+      botReply = `Note saved (#${note.id}).`;
       break;
     }
     case "note_list": {
@@ -84,8 +147,12 @@ export function processChatMessage(input: string, createdAt?: string): { user: M
       botReply = deleted ? `Deleted note #${intent.noteId}.` : `Note #${intent.noteId} was not found.`;
       break;
     }
+    case "help": {
+      botReply = helpText();
+      break;
+    }
     case "fallback": {
-      botReply = "I could not parse that. Supported: expenses, reminders, notes, note search/list/delete.";
+      botReply = `I could not parse that.\n${helpText()}`;
       break;
     }
   }

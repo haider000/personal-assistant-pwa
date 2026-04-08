@@ -8,8 +8,8 @@ export async function GET(request: NextRequest) {
   if (unauthorized) return unauthorized;
 
   const rangeParam = request.nextUrl.searchParams.get("range") ?? "daily";
-  const range = ["daily", "weekly", "monthly"].includes(rangeParam)
-    ? (rangeParam as "daily" | "weekly" | "monthly")
+  const range = ["daily", "weekly", "monthly", "yearly"].includes(rangeParam)
+    ? (rangeParam as "daily" | "weekly" | "monthly" | "yearly")
     : "daily";
 
   const repos = getRepositories();

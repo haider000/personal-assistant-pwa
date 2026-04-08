@@ -11,6 +11,10 @@ export function parseIntent(input: string, now = new Date()): ParsedIntent {
   const text = input.trim();
   const normalized = text.toLowerCase();
 
+  if (/^(?:help|commands|what can you do)\??$/i.test(text)) {
+    return { type: "help" };
+  }
+
   const expenseAdd = normalized.match(/^spent\s+(\d+(?:\.\d+)?)\s+(.+)$/i);
   if (expenseAdd) {
     const amount = Number(expenseAdd[1]);
@@ -27,14 +31,38 @@ export function parseIntent(input: string, now = new Date()): ParsedIntent {
     };
   }
 
+  const expenseAddAlt = normalized.match(/^(?:add\s+expense|expense)\s+(\d+(?:\.\d+)?)\s+(.+)$/i);
+  if (expenseAddAlt) {
+    const amount = Number(expenseAddAlt[1]);
+    const category = expenseAddAlt[2].trim();
+    if (!Number.isFinite(amount) || amount <= 0 || !category) {
+      return { type: "fallback", reason: "Invalid expense format" };
+    }
+
+    return {
+      type: "expense_add",
+      amount,
+      category,
+      date: now.toISOString(),
+    };
+  }
+
   if (
-    /(?:expense|spend).*(?:report|today|daily|week|weekly|month|monthly)/i.test(normalized) ||
-    /^(today|daily|weekly|monthly) expenses$/i.test(normalized)
+    /(?:expense|spend).*(?:report|today|daily|week|weekly|month|monthly|year|yearly)/i.test(normalized) ||
+    /^(?:report\s+)?(?:today|daily|this week|weekly|this month|monthly|this year|yearly)(?:\s+expenses)?$/i.test(
+      normalized
+    ) ||
+    /^report(?:\s+expenses)?$/i.test(normalized)
   ) {
-    let range: "daily" | "weekly" | "monthly" = "daily";
+    let range: "daily" | "weekly" | "monthly" | "yearly" = "daily";
     if (normalized.includes("week")) range = "weekly";
     if (normalized.includes("month")) range = "monthly";
+    if (normalized.includes("year")) range = "yearly";
     return { type: "expense_report", range };
+  }
+
+  if (/^(?:show|list|recent)\s+(?:my\s+)?expenses$/i.test(text)) {
+    return { type: "expense_list", limit: 8 };
   }
 
   const reminderMatch = text.match(/^(?:remind me|remind)\s+(.+?)\s+at\s+(.+)$/i);
@@ -64,6 +92,23 @@ export function parseIntent(input: string, now = new Date()): ParsedIntent {
         remindAt: parsed.toISOString(),
       };
     }
+  }
+
+  const setReminder = text.match(/^set reminder\s+(.+)$/i);
+  if (setReminder) {
+    const parsed = parseDate(setReminder[1], now);
+    if (parsed) {
+      const content = setReminder[1].replace(parsed.toLocaleString(), "").trim() || "Reminder";
+      return {
+        type: "reminder_create",
+        content,
+        remindAt: parsed.toISOString(),
+      };
+    }
+  }
+
+  if (/^(?:show|list)(?:\s+my)?\s+reminders$/i.test(text)) {
+    return { type: "reminder_list" };
   }
 
   const noteCreatePatterns = [/^note:\s*(.+)$/i, /^save note\s+(.+)$/i, /^add note\s+(.+)$/i, /^note\s+(.+)$/i];

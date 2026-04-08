@@ -33,11 +33,14 @@ export interface Note {
 export type ChatIntentType =
   | "expense_add"
   | "expense_report"
+  | "expense_list"
   | "reminder_create"
+  | "reminder_list"
   | "note_create"
   | "note_list"
   | "note_search"
   | "note_delete"
+  | "help"
   | "fallback";
 
 export type ParsedIntent =
@@ -49,12 +52,19 @@ export type ParsedIntent =
     }
   | {
       type: "expense_report";
-      range: "daily" | "weekly" | "monthly";
+      range: "daily" | "weekly" | "monthly" | "yearly";
+    }
+  | {
+      type: "expense_list";
+      limit: number;
     }
   | {
       type: "reminder_create";
       content: string;
       remindAt: string;
+    }
+  | {
+      type: "reminder_list";
     }
   | {
       type: "note_create";
@@ -71,6 +81,9 @@ export type ParsedIntent =
   | {
       type: "note_delete";
       noteId: number;
+    }
+  | {
+      type: "help";
     }
   | {
       type: "fallback";

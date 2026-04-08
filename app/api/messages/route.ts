@@ -12,3 +12,13 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json({ messages });
 }
+
+export async function DELETE(request: NextRequest) {
+  const unauthorized = await requireApiAuth(request);
+  if (unauthorized) return unauthorized;
+
+  const repos = getRepositories();
+  repos.messages.clear();
+
+  return NextResponse.json({ success: true });
+}

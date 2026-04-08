@@ -11,7 +11,7 @@ function toExpense(row: Record<string, unknown>): Expense {
   };
 }
 
-function getStartDate(range: "daily" | "weekly" | "monthly", reference = new Date()): Date {
+function getStartDate(range: "daily" | "weekly" | "monthly" | "yearly", reference = new Date()): Date {
   const d = new Date(reference);
   if (range === "daily") {
     d.setHours(0, 0, 0, 0);
@@ -21,6 +21,11 @@ function getStartDate(range: "daily" | "weekly" | "monthly", reference = new Dat
     const weekday = d.getDay();
     const diff = weekday === 0 ? 6 : weekday - 1;
     d.setDate(d.getDate() - diff);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }
+  if (range === "yearly") {
+    d.setMonth(0, 1);
     d.setHours(0, 0, 0, 0);
     return d;
   }
@@ -47,7 +52,29 @@ export const sqliteExpenseRepository = {
     };
   },
 
-  report(range: "daily" | "weekly" | "monthly", reference = new Date()) {
+  list(limit = 20): Expense[] {
+    const db = getDb();
+    const rows = db
+      .prepare(
+        `
+          SELECT id, amount, category, date, created_at
+          FROM expenses
+          ORDER BY date DESC, id DESC
+          LIMIT ?
+        `
+      )
+      .all(limit) as Record<string, unknown>[];
+
+    return rows.map(toExpense);
+  },
+
+  delete(expenseId: number): boolean {
+    const db = getDb();
+    const result = db.prepare(`DELETE FROM expenses WHERE id = ?`).run(expenseId);
+    return result.changes > 0;
+  },
+
+  report(range: "daily" | "weekly" | "monthly" | "yearly", reference = new Date()) {
     const db = getDb();
     const startDate = getStartDate(range, reference).toISOString();
 

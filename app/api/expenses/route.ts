@@ -3,6 +3,19 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireApiAuth } from "@/lib/auth/guards";
 import { getRepositories } from "@/lib/repositories";
 
+export async function GET(request: NextRequest) {
+  const unauthorized = await requireApiAuth(request);
+  if (unauthorized) return unauthorized;
+
+  const limitParam = Number(request.nextUrl.searchParams.get("limit") ?? "20");
+  const limit = Number.isFinite(limitParam) ? Math.min(Math.max(limitParam, 1), 100) : 20;
+
+  const repos = getRepositories();
+  const expenses = repos.expenses.list(limit);
+
+  return NextResponse.json({ expenses });
+}
+
 export async function POST(request: NextRequest) {
   const unauthorized = await requireApiAuth(request);
   if (unauthorized) return unauthorized;
