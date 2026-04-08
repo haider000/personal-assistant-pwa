@@ -70,4 +70,10 @@ export const sqliteReminderRepository = {
     const result = db.prepare(`DELETE FROM reminders WHERE id = ?`).run(id);
     return result.changes > 0;
   },
+
+  clear(): number {
+    const db = getDb();
+    const result = db.prepare(`DELETE FROM reminders`).run();
+    return result.changes;
+  },
 };

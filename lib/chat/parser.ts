@@ -7,6 +7,134 @@ function extractTags(content: string): string[] {
   return tagMatches.map((t) => t.slice(1).toLowerCase());
 }
 
+const monthMap: Record<string, number> = {
+  jan: 0,
+  january: 0,
+  feb: 1,
+  february: 1,
+  mar: 2,
+  march: 2,
+  apr: 3,
+  april: 3,
+  may: 4,
+  jun: 5,
+  june: 5,
+  jul: 6,
+  july: 6,
+  aug: 7,
+  august: 7,
+  sep: 8,
+  sept: 8,
+  september: 8,
+  oct: 9,
+  october: 9,
+  nov: 10,
+  november: 10,
+  dec: 11,
+  december: 11,
+};
+
+function trimExpenseLabel(text: string): string {
+  let next = text.replace(/\s+/g, " ").trim();
+
+  for (let index = 0; index < 3; index += 1) {
+    const withoutLeading = next.replace(/^(?:on|for|from|at)\s+/i, "").trim();
+    const withoutTrailing = withoutLeading.replace(/\s+(?:on|for|from|at)$/i, "").trim();
+    if (withoutTrailing === next) {
+      break;
+    }
+    next = withoutTrailing;
+  }
+
+  return next;
+}
+
+function isValidCalendarDate(year: number, monthIndex: number, day: number): boolean {
+  const candidate = new Date(year, monthIndex, day, 12, 0, 0, 0);
+  return (
+    candidate.getFullYear() === year &&
+    candidate.getMonth() === monthIndex &&
+    candidate.getDate() === day
+  );
+}
+
+function buildExpenseDate(year: number, monthIndex: number, day: number): string | null {
+  if (!isValidCalendarDate(year, monthIndex, day)) {
+    return null;
+  }
+
+  return new Date(year, monthIndex, day, 12, 0, 0, 0).toISOString();
+}
+
+function normalizeYear(rawYear: string): number {
+  const year = Number(rawYear);
+  if (rawYear.length === 2) {
+    return year >= 70 ? 1900 + year : 2000 + year;
+  }
+  return year;
+}
+
+function parseExplicitExpenseDate(rawValue: string, now: Date): { date: string; matchedText: string } | null {
+  const patterns = [
+    /\b(?:on\s+)?(\d{1,2})(?:st|nd|rd|th)?[\/-](\d{1,2})(?:[\/-](\d{2,4}))?\b/i,
+    /\b(?:on\s+)?(\d{1,2})(?:st|nd|rd|th)?\s+([a-zA-Z]+)(?:\s+(\d{2,4}))?\b/i,
+    /\bon\s+(\d{1,2})(?:st|nd|rd|th)?\b/i,
+  ] as const;
+
+  const numeric = rawValue.match(patterns[0]);
+  if (numeric) {
+    const day = Number(numeric[1]);
+    const monthIndex = Number(numeric[2]) - 1;
+    const year = numeric[3] ? normalizeYear(numeric[3]) : now.getFullYear();
+    const date = buildExpenseDate(year, monthIndex, day);
+    if (date) {
+      return { date, matchedText: numeric[0] };
+    }
+  }
+
+  const namedMonth = rawValue.match(patterns[1]);
+  if (namedMonth) {
+    const day = Number(namedMonth[1]);
+    const monthIndex = monthMap[namedMonth[2].toLowerCase()];
+    if (monthIndex !== undefined) {
+      const year = namedMonth[3] ? normalizeYear(namedMonth[3]) : now.getFullYear();
+      const date = buildExpenseDate(year, monthIndex, day);
+      if (date) {
+        return { date, matchedText: namedMonth[0] };
+      }
+    }
+  }
+
+  const dayOnly = rawValue.match(patterns[2]);
+  if (dayOnly) {
+    const day = Number(dayOnly[1]);
+    const date = buildExpenseDate(now.getFullYear(), now.getMonth(), day);
+    if (date) {
+      return { date, matchedText: dayOnly[0] };
+    }
+  }
+
+  return null;
+}
+
+function parseExpensePayload(rawValue: string, amountText: string, now: Date): ParsedIntent {
+  const amount = Number(amountText);
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return { type: "fallback", reason: "Invalid expense format" };
+  }
+
+  const explicitDate = parseExplicitExpenseDate(rawValue, now);
+  const categorySource = explicitDate ? rawValue.replace(explicitDate.matchedText, " ") : rawValue;
+  const category = trimExpenseLabel(categorySource) || "general";
+
+  return {
+    type: "expense_add",
+    amount,
+    category,
+    date: explicitDate?.date ?? now.toISOString(),
+  };
+}
+
 export function parseIntent(input: string, now = new Date()): ParsedIntent {
   const text = input.trim();
   const normalized = text.toLowerCase();
@@ -15,36 +143,14 @@ export function parseIntent(input: string, now = new Date()): ParsedIntent {
     return { type: "help" };
   }
 
-  const expenseAdd = normalized.match(/^spent\s+(\d+(?:\.\d+)?)\s+(.+)$/i);
+  const expenseAdd = text.match(/^spent\s+(\d+(?:\.\d+)?)\s+(.+)$/i);
   if (expenseAdd) {
-    const amount = Number(expenseAdd[1]);
-    const category = expenseAdd[2].trim();
-    if (!Number.isFinite(amount) || amount <= 0 || !category) {
-      return { type: "fallback", reason: "Invalid expense format" };
-    }
-
-    return {
-      type: "expense_add",
-      amount,
-      category,
-      date: now.toISOString(),
-    };
+    return parseExpensePayload(expenseAdd[2], expenseAdd[1], now);
   }
 
-  const expenseAddAlt = normalized.match(/^(?:add\s+expense|expense)\s+(\d+(?:\.\d+)?)\s+(.+)$/i);
+  const expenseAddAlt = text.match(/^(?:add\s+expense|expense)\s+(\d+(?:\.\d+)?)\s+(.+)$/i);
   if (expenseAddAlt) {
-    const amount = Number(expenseAddAlt[1]);
-    const category = expenseAddAlt[2].trim();
-    if (!Number.isFinite(amount) || amount <= 0 || !category) {
-      return { type: "fallback", reason: "Invalid expense format" };
-    }
-
-    return {
-      type: "expense_add",
-      amount,
-      category,
-      date: now.toISOString(),
-    };
+    return parseExpensePayload(expenseAddAlt[2], expenseAddAlt[1], now);
   }
 
   if (

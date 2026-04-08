@@ -74,6 +74,23 @@ export const sqliteExpenseRepository = {
     return result.changes > 0;
   },
 
+  clearAll(): number {
+    const db = getDb();
+    const result = db.prepare(`DELETE FROM expenses`).run();
+    return result.changes;
+  },
+
+  clearMonth(reference = new Date()): number {
+    const db = getDb();
+    const startDate = getStartDate("monthly", reference).toISOString();
+    const nextMonth = new Date(reference);
+    nextMonth.setMonth(nextMonth.getMonth() + 1, 1);
+    nextMonth.setHours(0, 0, 0, 0);
+
+    const result = db.prepare(`DELETE FROM expenses WHERE date >= ? AND date < ?`).run(startDate, nextMonth.toISOString());
+    return result.changes;
+  },
+
   report(range: "daily" | "weekly" | "monthly" | "yearly", reference = new Date()) {
     const db = getDb();
     const startDate = getStartDate(range, reference).toISOString();

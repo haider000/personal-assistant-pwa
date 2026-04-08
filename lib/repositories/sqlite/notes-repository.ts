@@ -67,4 +67,10 @@ export const sqliteNoteRepository = {
     const result = db.prepare(`DELETE FROM notes WHERE id = ?`).run(noteId);
     return result.changes > 0;
   },
+
+  clear(): number {
+    const db = getDb();
+    const result = db.prepare(`DELETE FROM notes`).run();
+    return result.changes;
+  },
 };

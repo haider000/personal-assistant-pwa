@@ -10,6 +10,8 @@ export interface ExpenseRepository {
   add(amount: number, category: string, date: string): Expense;
   list(limit?: number): Expense[];
   delete(expenseId: number): boolean;
+  clearAll(): number;
+  clearMonth(reference?: Date): number;
   report(range: "daily" | "weekly" | "monthly" | "yearly", reference?: Date): {
     total: number;
     count: number;
@@ -23,6 +25,7 @@ export interface ReminderRepository {
   markDelivered(id: number): void;
   listUpcoming(limit?: number): Reminder[];
   delete(id: number): boolean;
+  clear(): number;
 }
 
 export interface NoteRepository {
@@ -30,6 +33,7 @@ export interface NoteRepository {
   list(limit?: number): Note[];
   search(keyword: string): Note[];
   delete(noteId: number): boolean;
+  clear(): number;
 }
 
 export interface RepositoryBundle {

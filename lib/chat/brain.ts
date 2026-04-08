@@ -58,6 +58,7 @@ function helpText(): string {
   return [
     "Try one of these commands:",
     "- spent 18 lunch",
+    "- spent 500 on 2nd april from slice app",
     "- add expense 72 groceries",
     "- report today / this week / this month / this year",
     "- remind me to call mom at 7pm",

@@ -578,6 +578,66 @@ export default function ChatClient() {
     }
   }
 
+  async function clearCurrentMonthData() {
+    try {
+      if (
+        typeof window !== "undefined" &&
+        !window.confirm("Delete this month's expense entries? This cannot be undone.")
+      ) {
+        return;
+      }
+
+      setError("");
+      const response = await fetch("/api/data?scope=month", { method: "DELETE" });
+      if (!response.ok) throw new Error("clear month failed");
+      await refreshPanelsNow();
+    } catch {
+      setError("Unable to clear this month's expenses right now.");
+    }
+  }
+
+  async function clearAllData() {
+    try {
+      if (
+        typeof window !== "undefined" &&
+        !window.confirm("Delete all expenses, notes, reminders, and chat history? This cannot be undone.")
+      ) {
+        return;
+      }
+
+      setError("");
+      const response = await fetch("/api/data?scope=all", { method: "DELETE" });
+      if (!response.ok) throw new Error("clear all failed");
+
+      saveQueue([]);
+      if (typeof window !== "undefined") {
+        window.localStorage.removeItem(FREQUENT_COMMANDS_KEY);
+        window.localStorage.removeItem(WORKSPACE_CACHE_KEY);
+      }
+
+      startTransition(() => {
+        setMessages([]);
+        setReport({ range: reportRange, total: 0, count: 0, rows: [] });
+        setReminders([]);
+        setRecentExpenses([]);
+        setNotes([]);
+        setFrequentCommands([]);
+        setSmartSuggestions([]);
+      });
+      setPendingCount(0);
+      setInput("");
+      saveWorkspaceCache({
+        messages: [],
+        report: { range: reportRange, total: 0, count: 0, rows: [] },
+        reminders: [],
+        recentExpenses: [],
+        notes: [],
+      });
+    } catch {
+      setError("Unable to clear all data right now.");
+    }
+  }
+
   async function dismissReminder(id: number) {
     try {
       setError("");
@@ -586,6 +646,21 @@ export default function ChatClient() {
       await refreshPanelsNow();
     } catch {
       setError("Unable to dismiss that reminder.");
+    }
+  }
+
+  async function deleteExpense(id: number) {
+    try {
+      if (typeof window !== "undefined" && !window.confirm("Remove this expense entry?")) {
+        return;
+      }
+
+      setError("");
+      const response = await fetch(`/api/expenses/${id}`, { method: "DELETE" });
+      if (!response.ok) throw new Error("delete failed");
+      await refreshPanelsNow();
+    } catch {
+      setError("Unable to remove that expense entry.");
     }
   }
 
@@ -723,16 +798,50 @@ export default function ChatClient() {
                 </div>
               </div>
 
+              <div className="mt-4 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    void clearCurrentMonthData();
+                  }}
+                  className="rounded-full border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-900 transition hover:bg-amber-100"
+                >
+                  Clear this month
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    void clearAllData();
+                  }}
+                  className="rounded-full border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-medium text-rose-900 transition hover:bg-rose-100"
+                >
+                  Clear all data
+                </button>
+              </div>
+
               <div className="mt-4 space-y-2">
                 <p className="text-sm font-medium text-slate-900">Recent expenses</p>
                 {recentExpenses.length ? (
                   recentExpenses.map((expense) => (
                     <div key={expense.id} className="rounded-2xl bg-white/85 px-4 py-3">
                       <div className="flex items-center justify-between gap-3">
-                        <p className="text-sm font-medium capitalize text-slate-900">{expense.category}</p>
-                        <p className="text-sm font-semibold text-slate-900">{money(expense.amount)}</p>
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium capitalize text-slate-900">{expense.category}</p>
+                          <p className="mt-1 text-xs text-slate-500">{formatDate(expense.date)}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-semibold text-slate-900">{money(expense.amount)}</p>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              void deleteExpense(expense.id);
+                            }}
+                            className="rounded-full bg-rose-50 px-2.5 py-1 text-[11px] font-medium text-rose-700 transition hover:bg-rose-100"
+                          >
+                            Remove
+                          </button>
+                        </div>
                       </div>
-                      <p className="mt-1 text-xs text-slate-500">{formatDate(expense.date)}</p>
                     </div>
                   ))
                 ) : (
@@ -933,15 +1042,48 @@ export default function ChatClient() {
                 <p className="mt-2 text-3xl font-semibold">{money(report?.total ?? 0)}</p>
                 <p className="mt-1 text-xs text-slate-300">{report?.count ?? 0} entries</p>
               </div>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    void clearCurrentMonthData();
+                  }}
+                  className="rounded-full border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-900"
+                >
+                  Clear this month
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    void clearAllData();
+                  }}
+                  className="rounded-full border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-medium text-rose-900"
+                >
+                  Clear all data
+                </button>
+              </div>
               <div className="mt-4 space-y-3">
                 {recentExpenses.length ? (
                   recentExpenses.map((expense) => (
                     <div key={expense.id} className="rounded-[1.35rem] bg-white/85 px-4 py-3">
                       <div className="flex items-center justify-between gap-3">
-                        <p className="text-sm font-medium capitalize text-slate-900">{expense.category}</p>
-                        <p className="text-sm font-semibold text-slate-900">{money(expense.amount)}</p>
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium capitalize text-slate-900">{expense.category}</p>
+                          <p className="mt-1 text-xs text-slate-500">{formatDate(expense.date)}</p>
+                        </div>
+                        <div className="flex flex-col items-end gap-2">
+                          <p className="text-sm font-semibold text-slate-900">{money(expense.amount)}</p>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              void deleteExpense(expense.id);
+                            }}
+                            className="rounded-full bg-rose-50 px-2.5 py-1 text-[11px] font-medium text-rose-700"
+                          >
+                            Remove
+                          </button>
+                        </div>
                       </div>
-                      <p className="mt-1 text-xs text-slate-500">{formatDate(expense.date)}</p>
                     </div>
                   ))
                 ) : (
