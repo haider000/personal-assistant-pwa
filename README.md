@@ -1,36 +1,140 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Private Assistant PWA (Next.js)
 
-## Getting Started
+Production-ready private personal assistant with chat-based expense tracking, reminders, and notes.
 
-First, run the development server:
+## Stack
+
+- Next.js 16 (App Router)
+- Tailwind CSS 4
+- SQLite (`better-sqlite3`) with repository abstraction
+- Auth via signed session cookie (JWT with `jose`)
+- `node-cron` reminder scheduler
+- PWA via `next-pwa`
+
+## Features
+
+- Password-protected app and APIs
+- Chat UI (WhatsApp/Telegram style)
+- Intent parsing for:
+  - `expense_add`
+  - `expense_report`
+  - `reminder_create`
+  - `note_create`
+  - `note_list`
+  - `note_search`
+  - `fallback`
+- Notes support:
+  - save/list/search/delete
+- Message persistence
+- Offline-first queue:
+  - expense + note commands work offline and sync when online
+- Installable PWA with manifest + service worker
+
+## Folder Structure
+
+```text
+app/
+  api/
+    auth/{login,logout,session}/route.ts
+    chat/route.ts
+    messages/route.ts
+    notes/route.ts
+    notes/[id]/route.ts
+    expenses/route.ts
+    expenses/report/route.ts
+    reminders/route.ts
+    sync/route.ts
+  chat/page.tsx
+  login/page.tsx
+  manifest.ts
+  offline/page.tsx
+  layout.tsx
+  page.tsx
+components/
+  chat-client.tsx
+lib/
+  auth/{guards.ts,session.ts}
+  chat/{brain.ts,parser.ts}
+  config/env.ts
+  db/client.ts
+  repositories/
+    index.ts
+    types.ts
+    sqlite/*
+  scheduler/reminder-scheduler.ts
+  shared/types.ts
+instrumentation.ts
+proxy.ts
+```
+
+## Setup
+
+1. Install dependencies:
+
+```bash
+npm install
+```
+
+2. Configure environment:
+
+```bash
+cp .env.example .env.local
+```
+
+3. Start development:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+4. Open `http://localhost:3000`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Command Examples
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- `spent 250 food`
+- `weekly expense report`
+- `remind me gym at 7pm`
+- `note: buy milk tomorrow`
+- `save note project ideas #work`
+- `show notes`
+- `find note about gym`
+- `delete note 2`
 
-## Learn More
+## API Endpoints
 
-To learn more about Next.js, take a look at the following resources:
+- `POST /api/chat`
+- `GET /api/notes`
+- `POST /api/notes`
+- `DELETE /api/notes/:id`
+- `POST /api/expenses`
+- `GET /api/expenses/report?range=daily|weekly|monthly`
+- `GET /api/reminders`
+- `POST /api/reminders`
+- `GET /api/messages`
+- `POST /api/sync`
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Deploy
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### Vercel
 
-## Deploy on Vercel
+1. Push repository to GitHub.
+2. Import project into Vercel.
+3. Add environment variables from `.env.example`.
+4. Deploy.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Note: `node-cron` is best-effort on serverless platforms because instances can sleep. For guaranteed reminder execution, use Render background worker or a dedicated scheduler process.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### Render (recommended for scheduler reliability)
+
+1. Create a new Web Service from this repo.
+2. Build command: `npm install && npm run build`
+3. Start command: `npm run start`
+4. Add env vars.
+5. Set persistent disk path and keep `DATABASE_URL=./data/personal-assistant.db` (or move to mounted disk path).
+
+## Switching Database Provider
+
+`lib/repositories/index.ts` centralizes provider selection via `DB_PROVIDER`.
+
+- `sqlite` is implemented.
+- `mongodb` is intentionally unimplemented placeholder, ready for repository drop-in without changing route handlers/chat logic.

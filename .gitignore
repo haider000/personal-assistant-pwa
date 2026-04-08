@@ -24,6 +24,11 @@
 .DS_Store
 *.pem
 
+# next-pwa generated assets
+public/sw.js
+public/workbox-*.js
+public/fallback-*.js
+
 # debug
 npm-debug.log*
 yarn-debug.log*
