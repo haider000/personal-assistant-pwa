@@ -27,6 +27,7 @@ type SuggestedCommand = {
 
 const QUEUE_KEY = "pa_pending_queue";
 const FREQUENT_COMMANDS_KEY = "pa_frequent_commands";
+const WORKSPACE_CACHE_KEY = "pa_workspace_cache";
 const commandTemplates = [
   "spent 250 groceries",
   "report this month",
@@ -51,6 +52,34 @@ function loadQueue(): PendingItem[] {
 function saveQueue(queue: PendingItem[]) {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
+}
+
+type WorkspaceCache = {
+  messages?: Message[];
+  report?: ExpenseReport | null;
+  reminders?: Reminder[];
+  recentExpenses?: Expense[];
+  notes?: Note[];
+};
+
+function loadWorkspaceCache(): WorkspaceCache | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(WORKSPACE_CACHE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as WorkspaceCache;
+  } catch {
+    return null;
+  }
+}
+
+function saveWorkspaceCache(cache: WorkspaceCache) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(WORKSPACE_CACHE_KEY, JSON.stringify(cache));
+  } catch {
+    // Ignore storage errors for optional offline cache.
+  }
 }
 
 function loadFrequentCommands(): string[] {
@@ -228,8 +257,27 @@ export default function ChatClient() {
           setRecentExpenses(expensesData.expenses ?? []);
           setNotes(notesData.notes ?? []);
         });
+        saveWorkspaceCache({
+          messages: messagesData.messages ?? [],
+          report: reportData,
+          reminders: remindersData.reminders ?? [],
+          recentExpenses: expensesData.expenses ?? [],
+          notes: notesData.notes ?? [],
+        });
       } catch {
-        setError("Unable to load your assistant workspace.");
+        const cached = loadWorkspaceCache();
+        if (cached) {
+          startTransition(() => {
+            setMessages(cached.messages ?? []);
+            setReport(cached.report ?? null);
+            setReminders(cached.reminders ?? []);
+            setRecentExpenses(cached.recentExpenses ?? []);
+            setNotes(cached.notes ?? []);
+          });
+          setError("Offline mode: showing your last saved workspace snapshot.");
+        } else {
+          setError("Unable to load your assistant workspace.");
+        }
       }
     }
 
@@ -293,6 +341,14 @@ export default function ChatClient() {
           setRecentExpenses(expensesData.expenses ?? []);
           setNotes(notesData.notes ?? []);
         });
+        const cached = loadWorkspaceCache();
+        saveWorkspaceCache({
+          messages: cached?.messages ?? [],
+          report: reportData,
+          reminders: remindersData.reminders ?? [],
+          recentExpenses: expensesData.expenses ?? [],
+          notes: notesData.notes ?? [],
+        });
       } catch {
         setError("Unable to refresh assistant panels right now.");
       }
@@ -307,6 +363,13 @@ export default function ChatClient() {
     const data = (await response.json()) as { messages: Message[] };
     startTransition(() => {
       setMessages(data.messages ?? []);
+    });
+    saveWorkspaceCache({
+      messages: data.messages ?? [],
+      report,
+      reminders,
+      recentExpenses,
+      notes,
     });
   }
 
@@ -337,6 +400,13 @@ export default function ChatClient() {
       setRecentExpenses(expensesData.expenses ?? []);
       setNotes(notesData.notes ?? []);
     });
+    saveWorkspaceCache({
+      messages,
+      report: reportData,
+      reminders: remindersData.reminders ?? [],
+      recentExpenses: expensesData.expenses ?? [],
+      notes: notesData.notes ?? [],
+    });
   }
 
   const flushQueue = useEffectEvent(async () => {
@@ -362,8 +432,16 @@ export default function ChatClient() {
       };
 
       const syncedMessages = data.synced.flatMap((pair) => [pair.user, pair.bot]);
+      const nextMessages = [...messages, ...syncedMessages];
       startTransition(() => {
-        setMessages((prev) => [...prev, ...syncedMessages]);
+        setMessages(nextMessages);
+      });
+      saveWorkspaceCache({
+        messages: nextMessages,
+        report,
+        reminders,
+        recentExpenses,
+        notes,
       });
 
       saveQueue([]);
@@ -391,8 +469,16 @@ export default function ChatClient() {
     }
 
     const data = (await response.json()) as { user: Message; bot: Message };
+    const nextMessages = [...messages, data.user, data.bot];
     startTransition(() => {
-      setMessages((prev) => [...prev, data.user, data.bot]);
+      setMessages(nextMessages);
+    });
+    saveWorkspaceCache({
+      messages: nextMessages,
+      report,
+      reminders,
+      recentExpenses,
+      notes,
     });
     await refreshPanelsNow();
   }
@@ -414,8 +500,16 @@ export default function ChatClient() {
             ? createClientMessage("bot", "Reminder queued locally. It will sync when you reconnect.")
             : createClientMessage("bot", "Message queued. It will be processed when you are online.");
 
+    const nextMessages = [...messages, userMessage, botMessage];
     startTransition(() => {
-      setMessages((prev) => [...prev, userMessage, botMessage]);
+      setMessages(nextMessages);
+    });
+    saveWorkspaceCache({
+      messages: nextMessages,
+      report,
+      reminders,
+      recentExpenses,
+      notes,
     });
     storeFrequentCommand(message);
     setFrequentCommands(loadFrequentCommands());
@@ -471,6 +565,13 @@ export default function ChatClient() {
       if (!response.ok) throw new Error("clear failed");
       startTransition(() => {
         setMessages([]);
+      });
+      saveWorkspaceCache({
+        messages: [],
+        report,
+        reminders,
+        recentExpenses,
+        notes,
       });
     } catch {
       setError("Unable to clear history right now.");
